@@ -11,27 +11,33 @@ class TaskAgent(BaseAgent):
         )
 
     async def execute_task(self, prompt: str, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Manages tasks, priorities, and deadlines."""
         full_prompt = f"""
-        Task description: {prompt}
+        Action required for: {prompt}
         
         Current Tasks: {json.dumps(context.get('tasks', []), indent=2)}
         
-        Provide your internal reasoning and the modified task list.
+        Analyze the request and provide the necessary task modifications.
         Return JSON with:
         {{
-            "thought": "Internal reasoning (Chain-of-Thought)",
+            "thought": "Internal reasoning (CoT)",
             "action": "ADD | UPDATE | DELETE | ANALYZE",
-            "modified_tasks": [{{ "title": "...", "priority": "...", "status": "...", "deadline": "..." }}],
-            "final_response": "Explanation to the user"
+            "modified_tasks": [
+                {{ 
+                    "id": "(use existing if update/delete)",
+                    "title": "...", 
+                    "priority": "HIGH | MEDIUM | LOW", 
+                    "status": "TODO | IN_PROGRESS | DONE", 
+                    "deadline": "ISO format date or null" 
+                }}
+            ],
+            "final_response": "What should the user be told?"
         }}
         """
         response = self.model.generate_content(full_prompt)
-        try:
-            res_json = response.text.replace('```json', '').replace('```', '').strip()
-            return json.loads(res_json)
-        except Exception as e:
-            return {
-                "thought": f"Error parsing task agent response: {str(e)}",
-                "modified_tasks": [],
-                "final_response": "RUDRA Task Agent encountered an error."
-            }
+        res_data = self._parse_json(response.text)
+        
+        if "final_response" not in res_data:
+            res_data["final_response"] = f"RUDRA Task Agent has processed: {prompt}"
+        
+        return res_data

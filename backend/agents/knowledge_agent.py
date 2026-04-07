@@ -11,26 +11,26 @@ class KnowledgeAgent(BaseAgent):
         )
 
     async def execute_task(self, prompt: str, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Retrieves and manages information from notes and external knowledge."""
         full_prompt = f"""
-        Task description: {prompt}
+        Information request: {prompt}
         
-        Recent Notes: {json.dumps(context.get('notes', []), indent=2)}
+        System Notes: {json.dumps(context.get('notes', []), indent=2)}
         
-        Provide your internal reasoning and retrieve information or create a summary.
+        Analyze the request and provide relevant information or note updates.
         Return JSON with:
         {{
-            "thought": "Internal reasoning (Chain-of-Thought)",
-            "action": "STORE | RETRIEVE | SUMMARIZE",
-            "content": "Resulting content or retrieved note",
-            "final_response": "Explanation to the user"
+            "thought": "Internal reasoning (CoT)",
+            "answer": "Direct answer to the user's question",
+            "relevant_notes": [{{ "id": "...", "content": "..." }}],
+            "action_taken": "SEARCH | CREATE_NOTE | ANALYZE",
+            "final_response": "What should the user be told?"
         }}
         """
         response = self.model.generate_content(full_prompt)
-        try:
-            res_json = response.text.replace('```json', '').replace('```', '').strip()
-            return json.loads(res_json)
-        except Exception as e:
-            return {
-                "thought": f"Error parsing knowledge agent response: {str(e)}",
-                "final_response": "RUDRA Knowledge Agent encountered an error."
-            }
+        res_data = self._parse_json(response.text)
+        
+        if "final_response" not in res_data:
+            res_data["final_response"] = res_data.get("answer", f"RUDRA Knowledge Agent has processed: {prompt}")
+            
+        return res_data

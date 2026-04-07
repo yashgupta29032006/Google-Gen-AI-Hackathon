@@ -14,35 +14,36 @@ class Orchestrator(BaseAgent):
         prompt = f"""
         User Query: {query}
         
-        Current Context: {json.dumps(context, indent=2)}
+        Current System Context: {json.dumps(context, indent=2)}
         
-        Identify the subtasks and delegate them to the following agents:
-        - TaskAgent (to-dos, deadlines)
-        - CalendarAgent (scheduling, conflicts)
-        - KnowledgeAgent (notes, summaries)
-        - ContextAgent (urgency, lifestyle analysis)
-        
-        Return a JSON object with:
+        Decompose the user's intent into discrete tasks for specialized agents. 
+        Available Agents:
+        - TaskAgent: For creating, updating, or analyzing tasks/to-dos.
+        - CalendarAgent: For scheduling events, checking availability, or resolving conflicts.
+        - KnowledgeAgent: For retrieving information from notes or general knowledge queries.
+        - ContextAgent: For analyzing the "Life Mode" (CHILL, FOCUS, STUDY) and overall context.
+        - ExecutionAgent: For any actions requiring external tool integration (simulated).
+
+        Return a JSON object exactly as follows:
         {{
-            "thought": "Internal reasoning (Chain-of-Thought)",
+            "thought": "Internal reasoning (CoT) on why this plan was chosen.",
             "plan": [
                 {{
                     "agent": "Name of the Agent",
-                    "task": "Specific task for that agent"
+                    "task": "Specific, actionable task for the agent",
+                    "priority": "HIGH | MEDIUM | LOW"
                 }}
             ],
-            "estimated_impact": "Summary of what will change"
+            "estimated_impact": "Summary of what will change in the system."
         }}
         """
         response = self.model.generate_content(prompt)
-        # Attempt to parse JSON from response
-        try:
-            # Simple parsing for demo (should be more robust in real production code)
-            plan_json = response.text.replace('```json', '').replace('```', '').strip()
-            return json.loads(plan_json)
-        except Exception as e:
-            return {
-                "thought": f"Error parsing orchestrator response: {str(e)}",
-                "plan": [],
-                "estimated_impact": "Unknown"
-            }
+        plan_data = self._parse_json(response.text)
+        
+        # Ensure 'plan' is always a list even in failure scenarios
+        if "plan" not in plan_data:
+            plan_data["plan"] = []
+        if "thought" not in plan_data:
+            plan_data["thought"] = "RUDRA Orchestrator is planning the next steps..."
+            
+        return plan_data

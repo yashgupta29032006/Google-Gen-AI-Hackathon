@@ -23,24 +23,26 @@ class ExecutionAgent(BaseAgent):
             return {"status": "error", "message": f"Tool {tool_name} not found"}
 
     async def execute_task(self, prompt: str, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Interfaces with simulated external tools and APIs."""
         full_prompt = f"""
-        Action required: {prompt}
+        API Action required: {prompt}
         
-        Provide your internal reasoning and the specific tool calls needed.
+        System State: {json.dumps(context, indent=2)}
+        
+        Simulate the interface with an external tool (Search, Email, Maps, etc.).
         Return JSON with:
         {{
-            "thought": "Internal reasoning (Chain-of-Thought)",
-            "tool_calls": [{{ "tool": "...", "args": {{ ... }} }}],
-            "final_response": "Explanation to the user"
+            "thought": "Internal reasoning (CoT)",
+            "tool": "Name of the tool used",
+            "action": "What was done",
+            "result": "Output from the tool",
+            "final_response": "What should the user be told?"
         }}
         """
         response = self.model.generate_content(full_prompt)
-        try:
-            res_json = response.text.replace('```json', '').replace('```', '').strip()
-            return json.loads(res_json)
-        except Exception as e:
-            return {
-                "thought": f"Error parsing execution agent response: {str(e)}",
-                "tool_calls": [],
-                "final_response": "RUDRA Execution Agent encountered an error."
-            }
+        res_data = self._parse_json(response.text)
+        
+        if "final_response" not in res_data:
+            res_data["final_response"] = f"RUDRA Execution Agent has successfully interfaced with: {res_data.get('tool', 'external systems')}"
+            
+        return res_data

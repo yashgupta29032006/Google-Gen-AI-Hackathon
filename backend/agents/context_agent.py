@@ -10,29 +10,26 @@ class ContextAgent(BaseAgent):
             role="Specialist in analyzing time, urgency, and user behavior patterns."
         )
 
-    async def analyze_context(self, query: str, current_mode: str, data: Dict[str, Any]) -> Dict[str, Any]:
-        prompt = f"""
-        User Query: {query}
-        Current Mode: {current_mode}
+    async def analyze_context(self, query: str, current_mode: str, history: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Analyzes behavior, urgency, and suggests 'Life Mode' adjustments."""
+        full_prompt = f"""
+        User Interaction: {query}
+        Current Life Mode: {current_mode}
+        Recent History: {json.dumps(history, indent=2)}
         
-        Recent Activity: {json.dumps(data.get('logs', []), indent=2)}
-        
-        Determine if there is an urgency shift or if we should suggest changing "Life Modes".
+        Analyze the emotional tone, urgency, and behavioral context.
         Return JSON with:
         {{
-            "thought": "Internal reasoning (Chain-of-Thought)",
-            "suggested_mode": "FOCUS | STUDY | CHILL | NO_CHANGE",
-            "urgency_level": "Level 1 to 5",
-            "observation": "What the user behavior patterns suggest"
+            "thought": "Internal reasoning (CoT)",
+            "sentiment": "POSITIVE | NEUTRAL | NEGATIVE | STRESSED",
+            "urgency": "CRITICAL | HIGH | MEDIUM | LOW",
+            "suggested_mode": "CHILL | FOCUS | STUDY",
+            "reasoning": "Why this mode is suggested"
         }}
         """
-        response = self.model.generate_content(prompt)
-        try:
-            res_json = response.text.replace('```json', '').replace('```', '').strip()
-            return json.loads(res_json)
-        except Exception as e:
-            return {
-                "thought": f"Error parsing context agent response: {str(e)}",
-                "suggested_mode": "NO_CHANGE",
-                "urgency_level": "Unknown"
-            }
+        response = self.model.generate_content(full_prompt)
+        return self._parse_json(response.text)
+
+    async def execute_task(self, prompt: str, context: Dict[str, Any]) -> Dict[str, Any]:
+        # ContextAgent primarily uses analyze_context, but we implement execute_task for consistency
+        return await self.analyze_context(prompt, context.get('mode', 'CHILL'), context.get('history', []))
