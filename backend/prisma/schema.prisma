@@ -1,0 +1,58 @@
+generator client {
+  provider = "prisma-client-py"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String?
+  tasks     Task[]
+  events    Event[]
+  notes     Note[]
+  logs      AgentLog[]
+}
+
+model Task {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  priority    String   @default("MEDIUM")
+  status      String   @default("TODO")
+  deadline    DateTime?
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+}
+
+model Event {
+  id          String   @id @default(uuid())
+  title       String
+  location    String?
+  startTime   DateTime
+  endTime     DateTime
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+}
+
+model Note {
+  id        String   @id @default(uuid())
+  content   String
+  embedding Float[]
+  createdAt DateTime @default(now())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model AgentLog {
+  id        String   @id @default(uuid())
+  agent     String
+  thought   String
+  decision  String
+  timestamp DateTime @default(now())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+}
