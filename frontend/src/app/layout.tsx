@@ -1,11 +1,25 @@
 import '../styles/globals.css'
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+import { Inter, Space_Grotesk } from 'next/font/google'
+import { clsx, type ClassValue } from 'clsx'
+import { twMerge } from 'tailwind-merge'
 
-const inter = Inter({ subsets: ['latin'] })
+const inter = Inter({ 
+  subsets: ['latin'],
+  variable: '--font-inter',
+})
+
+const spaceGrotesk = Space_Grotesk({ 
+  subsets: ['latin'],
+  variable: '--font-space-grotesk',
+})
+
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
+}
 
 export const metadata: Metadata = {
-  title: 'RUDRA OS | Responsive Unified Decision & Resource Assistant',
+  title: 'RUDRA OS | Sentient Canvas',
   description: 'An intelligent multi-agent operating system for life management.',
 }
 
@@ -15,8 +29,14 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
-      <body className={inter.className}>{children}</body>
+    <html lang="en" className="dark">
+      <body className={cn(
+        "min-h-screen font-sans antialiased bg-background text-white selection:bg-primary/30 selection:text-primary",
+        inter.variable,
+        spaceGrotesk.variable
+      )}>
+        {children}
+      </body>
     </html>
   )
 }

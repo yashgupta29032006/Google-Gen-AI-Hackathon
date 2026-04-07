@@ -1,155 +1,93 @@
-'use client'
+'use client';
 
-import { useState, useRef, useEffect } from 'react'
-import { Send, Bot, User, Sparkles, Loader2, ArrowRight } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
+import React, { useState, useRef, useEffect } from 'react';
+import { Send, Sparkles, Command } from 'lucide-react';
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
 
-export default function Chat() {
-  const [messages, setMessages] = useState<any[]>([
-    { role: 'assistant', content: 'Welcome to RUDRA OS. How can I assist you with your life management today?', agents: [] }
-  ])
-  const [input, setInput] = useState('')
-  const [isThinking, setIsThinking] = useState(false)
-  const chatEndRef = useRef<HTMLDivElement>(null)
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
+}
 
-  const scrollToBottom = () => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }
+interface ChatProps {
+  onQuery: (text: string) => void;
+  isPending?: boolean;
+}
+
+export default function Chat({ onQuery, isPending }: ChatProps) {
+  const [query, setQuery] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (query.trim() && !isPending) {
+      onQuery(query);
+      setQuery('');
+    }
+  };
 
   useEffect(() => {
-    scrollToBottom()
-  }, [messages, isThinking])
-
-  const handleSend = async () => {
-    if (!input.trim()) return
-
-    const userMessage = { role: 'user', content: input }
-    setMessages(prev => [...prev, userMessage])
-    setInput('')
-    setIsThinking(true)
-
-    try {
-      // Simulate API call to backend
-      const response = await fetch('http://localhost:8000/query', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: input, user_id: 'demo-user', context: {} })
-      })
-      
-      const data = await response.json()
-      
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: data.final_response,
-        thought: data.thought,
-        agents: data.agent_responses || []
-      }])
-    } catch (error) {
-      // Mock response for demo if backend not running
-      setTimeout(() => {
-        setMessages(prev => [...prev, { 
-          role: 'assistant', 
-          content: "I've analyzed your request and coordinated with the Task and Calendar agents to optimize your schedule.",
-          thought: "User intent: Weekly planning. Delegating to TaskAgent for priority identification and CalendarAgent for slot allocation.",
-          agents: [
-            { agent: 'TaskAgent', result: { thought: 'Prioritizing exams and high-impact projects.' } },
-            { agent: 'CalendarAgent', result: { thought: 'Identifying free blocks and adding buffer times.' } }
-          ]
-        }])
-      }, 2000)
-    } finally {
-      setIsThinking(false)
-    }
-  }
+    const down = (e: KeyboardEvent) => {
+      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        inputRef.current?.focus();
+      }
+    };
+    document.addEventListener('keydown', down);
+    return () => document.removeEventListener('keydown', down);
+  }, []);
 
   return (
-    <div className="glass modern-card h-full flex flex-col overflow-hidden max-h-[700px]">
-      {/* Header */}
-      <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between bg-white/5">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-violet-500/20 text-violet-400">
-            <Sparkles size={20} />
-          </div>
-          <div>
-            <h3 className="font-bold text-slate-100">RUDRA Core</h3>
-            <p className="text-[10px] text-emerald-500 flex items-center gap-1 font-bold uppercase tracking-widest">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> system active
-            </p>
-          </div>
-        </div>
-      </div>
+    <div className="w-full max-w-3xl mx-auto mt-auto pt-8">
+      <form onSubmit={handleSubmit} className="relative group">
+        <div className={cn(
+          "relative glass-card bg-surface-highest/40 rounded-[2.5rem] p-1 shadow-2xl transition-all duration-500",
+          "ring-1 ring-white/5 group-focus-within:ring-primary/40 group-focus-within:bg-surface-highest/60 group-focus-within:shadow-[0_0_50px_rgba(136,173,255,0.15)]",
+          isPending && "animate-pulse"
+        )}>
+          <div className="flex items-center gap-4 px-6 py-4">
+            <Sparkles className={cn(
+              "w-5 h-5 transition-colors duration-300",
+              isPending ? "text-primary animate-spin" : "text-white/40 group-focus-within:text-primary"
+            )} />
+            
+            <input
+              ref={inputRef}
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Ask anything or use Command+K"
+              className="flex-1 bg-transparent border-none outline-none text-lg font-medium placeholder:text-white/20 text-white"
+              disabled={isPending}
+            />
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6 custom-scrollbar">
-        <AnimatePresence>
-          {messages.map((m, i) => (
-            <motion.div 
-              key={i}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}
-            >
-              <div className={`max-w-[85%] p-4 rounded-2xl ${m.role === 'user' ? 'bg-violet-600 text-white rounded-tr-none' : 'glass border-l-4 border-violet-500 rounded-tl-none'}`}>
-                <div className="flex items-center gap-2 mb-2 text-[10px] uppercase tracking-widest font-bold opacity-60">
-                   {m.role === 'user' ? <><User size={12} /> You</> : <><Bot size={12} /> RUDRA OS</>}
-                </div>
-                <p className="text-sm leading-relaxed">{m.content}</p>
-                
-                {m.thought && (
-                   <div className="mt-4 pt-4 border-t border-white/5 text-[11px] text-slate-500 italic flex gap-2">
-                       <span className="font-bold text-violet-400/60 not-italic">THOUGHT:</span> {m.thought}
-                   </div>
-                )}
-              </div>
-
-              {/* Agent Breakdown */}
-              {m.agents && m.agents.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-2 pl-4">
-                  {m.agents.map((agent: any, idx: number) => (
-                    <motion.div 
-                      key={idx}
-                      initial={{ scale: 0.9, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      transition={{ delay: 0.2 + idx * 0.1 }}
-                      className="text-[10px] glass px-3 py-1.5 rounded-full font-bold flex items-center gap-2 border border-violet-500/30 text-violet-400"
-                    >
-                      <ArrowRight size={10} /> {agent.agent} Processed
-                    </motion.div>
-                  ))}
+            <div className="flex items-center gap-2">
+              {!query && (
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-[10px] font-bold text-white/30 tracking-widest uppercase">
+                  <Command className="w-3 h-3" />
+                  <span>K</span>
                 </div>
               )}
-            </motion.div>
-          ))}
-        </AnimatePresence>
-        
-        {isThinking && (
-          <div className="flex items-center gap-3 text-slate-500 italic text-sm animate-pulse">
-            <Loader2 className="animate-spin text-violet-500" size={16} /> RUDRA is coordinating agents...
+              
+              <button
+                type="submit"
+                disabled={!query || isPending}
+                className={cn(
+                  "p-3 rounded-full transition-all duration-300",
+                  query && !isPending 
+                    ? "soul-gradient text-white shadow-lg shadow-primary/20 scale-100" 
+                    : "bg-white/5 text-white/20 scale-90"
+                )}
+              >
+                <Send className="w-5 h-5" />
+              </button>
+            </div>
           </div>
-        )}
-        <div ref={chatEndRef} />
-      </div>
-
-      {/* Input */}
-      <div className="p-4 bg-white/5 border-t border-white/5">
-        <div className="glass flex items-center gap-2 p-2 px-4 rounded-2xl focus-within:ring-2 ring-violet-500/50 transition-all">
-          <input 
-            type="text" 
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-            placeholder="Plan my week / I have an exam..." 
-            className="flex-1 bg-transparent border-none outline-none text-sm py-2 placeholder:text-slate-600"
-          />
-          <button 
-            onClick={handleSend}
-            disabled={!input.trim() || isThinking}
-            className="p-2 bg-violet-600 rounded-xl text-white hover:bg-violet-500 disabled:opacity-50 disabled:hover:bg-violet-600 transition-all"
-          >
-            <Send size={18} />
-          </button>
         </div>
-      </div>
+        
+        {/* Decorative glow beneath the input */}
+        <div className="absolute -bottom-2 lg:left-12 lg:right-12 h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent blur-sm opacity-0 group-focus-within:opacity-100 transition-opacity duration-700" />
+      </form>
     </div>
-  )
+  );
 }
