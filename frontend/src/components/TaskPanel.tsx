@@ -71,8 +71,8 @@ export default function TaskPanel({ tasks }: TaskPanelProps) {
                 <div className="flex-1 space-y-1.5">
                   <div className="flex items-center justify-between">
                     <span className={cn(
-                      "text-[10px] font-bold tracking-widest uppercase px-2 py-0.5 rounded-md",
-                      config.color,
+                      "text-[9px] font-bold tracking-[0.15em] uppercase px-2 py-0.5 rounded-full border",
+                      config.color.replace('text', 'border'),
                       config.bg
                     )}>
                       {task.priority}
@@ -98,10 +98,13 @@ export default function TaskPanel({ tasks }: TaskPanelProps) {
                 </div>
               </div>
 
-              {/* Action Progress Bar for IN_PROGRESS */}
+              {/* Action Progress Bar for IN_PROGRESS - Minimalist */}
               {task.status === 'IN_PROGRESS' && (
-                <div className="mt-4 h-1 w-full bg-white/5 rounded-full overflow-hidden">
-                  <div className="h-full w-2/3 soul-gradient rounded-full animate-pulse" />
+                <div className="mt-4 flex items-center gap-3">
+                  <div className="h-0.5 flex-1 bg-white/5 rounded-full overflow-hidden">
+                    <div className="h-full w-2/3 bg-primary rounded-full" />
+                  </div>
+                  <span className="text-[9px] font-bold text-primary/60 uppercase tracking-widest">Active</span>
                 </div>
               )}
             </div>
