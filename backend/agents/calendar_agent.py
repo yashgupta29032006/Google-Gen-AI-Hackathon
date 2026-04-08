@@ -11,34 +11,17 @@ class CalendarAgent(BaseAgent):
         )
 
     async def execute_task(self, prompt: str, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Manages schedule, conflicts, and events."""
-        full_prompt = f"""
-        Scheduling required for: {prompt}
-        
-        Current Schedule: {json.dumps(context.get('schedule', []), indent=2)}
-        
-        Analyze the request and provide schedule updates.
-        Return JSON with:
-        {{
-            "thought": "Internal reasoning (CoT)",
-            "action": "SCHEDULE | RESCHEDULE | CANCEL | ANALYZE",
-            "updated_schedule": [
-                {{ 
-                    "id": "(use existing if reschedule/cancel)",
-                    "title": "...", 
-                    "startTime": "ISO format dateTime", 
-                    "endTime": "ISO format dateTime", 
-                    "location": "..." 
-                }}
-            ],
-            "final_response": "What should the user be told?"
-        }}
-        """
-        response = self.model.generate_content(full_prompt)
-        res_data = self._parse_json(response.text)
+        """Deterministic Handler: Executes schedule updates provided by Orchestrator."""
+        if isinstance(prompt, dict):
+            res_data = prompt
+        else:
+            res_data = {
+                "thought": "Processing schedule data deterministically.",
+                "action": "ANALYZE",
+                "final_response": "Calendar strategist is reviewing your schedule."
+            }
         
         if "final_response" not in res_data:
-            res_data["final_response"] = f"RUDRA Schedule Strategist has processed: {prompt}"
+            res_data["final_response"] = "Schedule has been updated."
             
         return res_data
-        

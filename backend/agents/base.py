@@ -2,6 +2,7 @@ import json
 import os
 import google.generativeai as genai
 from typing import Dict, Any, Optional, List
+from datetime import datetime, date
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -43,22 +44,16 @@ class BaseAgent:
                     pass
         
         return {"error": "Failed to parse JSON response", "raw_text": text}
+    
+    def _json_serial(self, obj):
+        """JSON serializer for objects not serializable by default json code"""
+        if isinstance(obj, (datetime, date)):
+            return obj.isoformat()
+        raise TypeError ("Type %s not serializable" % type(obj))
 
-    async def generate_thought(self, prompt: str, context: Dict[str, Any]) -> str:
-        """Standardize internal reasoning generation."""
-        full_prompt = f"""
-        System Role: {self.role}
-        Agent Name: {self.name}
-        
-        Context: {json.dumps(context, indent=2)}
-        
-        Task: {prompt}
-        
-        Provide your internal reasoning (Chain-of-Thought) for the next step. 
-        Be concise but thorough.
-        """
-        response = self.model.generate_content(full_prompt)
-        return response.text.strip()
+    def to_json(self, data: Any) -> str:
+        """Unified JSON serialization with datetime support."""
+        return json.dumps(data, indent=2, default=self._json_serial)
 
     async def execute_task(self, prompt: str, context: Dict[str, Any]) -> Dict[str, Any]:
         """Execute the primary task for the agent."""

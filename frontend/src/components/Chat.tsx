@@ -16,11 +16,18 @@ interface ChatProps {
 
 export default function Chat({ onQuery, isPending }: ChatProps) {
   const [query, setQuery] = useState('');
+  const lastSubmitTime = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const now = Date.now();
+    
+    // 300ms debounce to prevent rapid Enter key presses
+    if (now - lastSubmitTime.current < 300) return;
+    
     if (query.trim() && !isPending) {
+      lastSubmitTime.current = now;
       onQuery(query);
       setQuery('');
     }

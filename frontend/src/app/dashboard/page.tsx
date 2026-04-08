@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Sidebar from '@/components/Sidebar';
 import ExecutionTrace from '@/components/ExecutionTrace';
 import Chat from '@/components/Chat';
@@ -19,6 +19,8 @@ export default function Dashboard() {
   const [events, setEvents] = useState([]);
   const [trace, setTrace] = useState({ agents: [], reasoning: '', isProcessing: false });
   const [lastResponse, setLastResponse] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const hasFetched = useRef(false);
 
   const fetchStaticData = async () => {
     try {
@@ -36,7 +38,11 @@ export default function Dashboard() {
   };
 
   const handleQuery = async (text: string) => {
-    setTrace({ agents: [], reasoning: 'Orchestrating system resources...', isProcessing: true });
+    if (!text.trim()) return;
+    
+    setTrace({ agents: [], reasoning: 'Thinking...', isProcessing: true });
+    setError(null);
+    
     try {
       const res = await fetch('http://localhost:8000/query', {
         method: 'POST',
@@ -47,7 +53,19 @@ export default function Dashboard() {
           context: { mode: 'CHILL' }
         })
       });
+      
       const data = await res.json();
+
+      if (!res.ok || data.status === 'error') {
+        const msg = data.response || "RUDRA OS encountered an issue. Please try again.";
+        setError(msg);
+        setTrace({
+          agents: ['Orchestrator'],
+          reasoning: data.reasoning || 'Connection failure.',
+          isProcessing: false
+        });
+        return;
+      }
       
       setTrace({
         agents: data.agents_used || [],
@@ -56,15 +74,20 @@ export default function Dashboard() {
       });
       setLastResponse(data.response);
       
-      // Refresh data after agent execution
+      // Refresh local data after agent execution
       await fetchStaticData();
-    } catch (err) {
-      setTrace(t => ({ ...t, isProcessing: false, reasoning: 'System communication error.' }));
+    } catch (err: any) {
+      console.error("Query failed:", err);
+      setTrace(t => ({ ...t, isProcessing: false, reasoning: `Communication Error: ${err.message}` }));
+      setError("RUDRA Core is unreachable. Is the backend server running?");
     }
   };
 
   useEffect(() => {
-    fetchStaticData();
+    if (!hasFetched.current) {
+      hasFetched.current = true;
+      fetchStaticData();
+    }
   }, []);
 
   return (
@@ -97,6 +120,13 @@ export default function Dashboard() {
 
         {/* Scrollable Workspace */}
         <div className="flex-1 overflow-y-auto px-12 pt-8 pb-32 space-y-12">
+          {/* Error Message */}
+          {error && (
+            <div className="glass-card bg-rose-500/10 border-rose-500/20 p-6 rounded-3xl animate-fade-in">
+              <p className="text-sm font-medium text-rose-400">{error}</p>
+            </div>
+          )}
+
           {/* Welcome / Response Card */}
           {lastResponse ? (
             <section className="glass-card bg-primary/5 border-primary/20 p-8 rounded-[3rem] animate-fade-in relative overflow-hidden group">

@@ -7,11 +7,13 @@ import { twMerge } from 'tailwind-merge'
 const inter = Inter({ 
   subsets: ['latin'],
   variable: '--font-inter',
+  display: 'swap',
 })
 
 const spaceGrotesk = Space_Grotesk({ 
   subsets: ['latin'],
   variable: '--font-space-grotesk',
+  display: 'swap',
 })
 
 function cn(...inputs: ClassValue[]) {
@@ -29,12 +31,8 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className="dark">
-      <body className={cn(
-        "min-h-screen font-sans antialiased bg-background text-white selection:bg-primary/30 selection:text-primary",
-        inter.variable,
-        spaceGrotesk.variable
-      )}>
+    <html lang="en" className={cn("dark", inter.variable, spaceGrotesk.variable)}>
+      <body className="min-h-screen font-sans antialiased bg-background text-white selection:bg-primary/30 selection:text-primary">
         {children}
       </body>
     </html>

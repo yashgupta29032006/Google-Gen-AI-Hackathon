@@ -12,8 +12,8 @@
   --color-secondary: #ac8aff;
   --color-tertiary: #8ff5ff;
   
-  --font-sans: var(--font-inter), system-ui, sans-serif;
-  --font-headline: var(--font-space-grotesk), system-ui, sans-serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-headline: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
   
   --radius-3xl: 1.5rem;
   --radius-4xl: 2rem;

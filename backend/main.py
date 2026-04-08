@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import uvicorn
@@ -24,7 +25,14 @@ load_dotenv()
 app = FastAPI(title="RUDRA OS", version="1.0.0")
 db = Prisma()
 
+# In-memory Caching
+QUERY_CACHE: Dict[str, Any] = {}
+from google.api_core import exceptions as google_exceptions
+
 # Enable CORS
+# Global Request Lock
+is_request_in_progress = False
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -85,6 +93,17 @@ def normalize_datetime(dt_str: Optional[str]) -> Optional[datetime]:
 
 @app.post("/query")
 async def handle_query(query: UserQuery):
+    # 0.6. GLOBAL REQUEST LOCK
+    global is_request_in_progress
+    if is_request_in_progress:
+        return {
+            "response": "A request is already being processed. Please wait.",
+            "agents_used": ["System"],
+            "reasoning": "RUDRA Lock: Request in progress.",
+            "status": "error"
+        }
+    
+    is_request_in_progress = True
     try:
         # 0. Ensure user exists (Fix for foreign key constraint)
         user = await db.user.find_unique(where={"id": query.user_id})
@@ -105,34 +124,61 @@ async def handle_query(query: UserQuery):
             "schedule": [e.dict() for e in db_events]
         }
 
-        # 1. Orchestrator determines the plan
-        plan_result = await agents["Orchestrator"].determine_plan(query.text, full_context)
-        tasks_to_execute = plan_result.get("plan", [])
+        # 0.7. Check Cache
+        cache_key = f"{query.user_id}:{query.text.strip().lower()}"
+        if cache_key in QUERY_CACHE:
+            print(f"CACHE HIT for {cache_key}")
+            return QUERY_CACHE[cache_key]
+
+        # 1. Orchestrator determines the ONE AND ONLY plan (Single LLM Call)
+        # Implement 429 Retry-Once logic
+        plan_result = None
+        for attempt in range(2):
+            try:
+                plan_result = await agents["Orchestrator"].determine_plan(query.text, full_context)
+                break 
+            except google_exceptions.ResourceExhausted:
+                if attempt == 0:
+                    print("⚠️ 429 Exceeded. Waiting 2s for retry-once...")
+                    await asyncio.sleep(2)
+                    continue
+                else:
+                    return {
+                        "response": "RUDRA OS is currently under high load. Please try again in a few moments.",
+                        "agents_used": ["Orchestrator"],
+                        "reasoning": "429: Rate Limit Exceeded after retry.",
+                        "status": "error"
+                    }
+            except Exception as e:
+                raise e
+
+        if not plan_result:
+            raise Exception("Failed to generate plan from Orchestrator.")
+
+        # 2. Sequential Agent Execution (Now deterministic)
+        actions_to_execute = plan_result.get("actions", [])
+        agent_names_used = plan_result.get("agents_used", []) or ["Orchestrator"]
         
-        # 2. Parallel Agent Execution
-        executed_tasks = []
-        agent_names_used = []
-        
-        async def run_agent_task(task_info):
-            agent_name = task_info.get("agent")
-            task_desc = task_info.get("task")
+        reasoning_steps = [f"Orchestrator: {plan_result.get('thought', '')}"]
+        results = []
+
+        for action in actions_to_execute:
+            agent_name = action.get("agent")
+            agent_data = action.get("data")
+            
+            # Find the actual agent key
             agent_key = next((k for k in agents.keys() if k.lower() in agent_name.lower()), None)
             
             if agent_key and agent_key != "Orchestrator":
                 try:
-                    res = await agents[agent_key].execute_task(task_desc, full_context)
-                    agent_names_used.append(agent_key)
-                    return {"agent": agent_key, "result": res}
+                    res = await agents[agent_key].execute_task(agent_data, full_context)
+                    results.append({"agent": agent_key, "result": res})
                 except Exception as e:
-                    return {"agent": agent_key, "error": str(e)}
-            return None
+                    reasoning_steps.append(f"{agent_name}: Logic failure - {str(e)}")
 
-        # Execute in parallel
-        results = await asyncio.gather(*(run_agent_task(t) for t in tasks_to_execute))
         results = [r for r in results if r is not None]
         
         # 3. Process database updates from results (with granular error handling)
-        reasoning_steps = [f"Orchestrator: {plan_result.get('thought', '')}"]
         final_responses = []
 
         for r in results:
@@ -198,26 +244,38 @@ async def handle_query(query: UserQuery):
                 reasoning_steps.append(f"{agent}: Database Persistence failed - {str(inner_e)}")
 
         # 4. Format Structured Response
-        main_response = " ".join(final_responses) if final_responses else f"RUDRA OS has successfully executed the plan for: {query.text}"
+        main_response = plan_result.get("final_response", "I've updated your system state.")
         
-        return {
+        if final_responses:
+            main_response += " " + " ".join(final_responses)
+            
+        final_payload = jsonable_encoder({
             "response": main_response,
             "agents_used": list(set(agent_names_used)),
-            "reasoning": "\n".join(reasoning_steps)
-        }
+            "reasoning": "\n".join(reasoning_steps),
+            "status": "success",
+            "timestamp": datetime.now().isoformat()
+        })
+        
+        # Cache the result
+        QUERY_CACHE[cache_key] = final_payload
+        return final_payload
 
     except Exception as e:
         print(f"CRITICAL ERROR: {str(e)}")
         return {
             "response": "I encountered a system-wide error while processing your request. Please try again.",
             "agents_used": ["Orchestrator"],
-            "reasoning": f"System Crash: {str(e)}"
+            "reasoning": f"System Crash: {str(e)}",
+            "status": "error"
         }
+    finally:
+        is_request_in_progress = False
 
 @app.get("/tasks")
 async def get_tasks(user_id: str = "demo-user"):
     tasks = await db.task.find_many(where={"userId": user_id})
-    return tasks
+    return jsonable_encoder(tasks)
 
 @app.post("/tasks")
 async def create_task(task_data: TaskUpdate):
@@ -240,7 +298,7 @@ async def create_task(task_data: TaskUpdate):
 @app.get("/calendar")
 async def get_calendar(user_id: str = "demo-user"):
     events = await db.event.find_many(where={"userId": user_id})
-    return events
+    return jsonable_encoder(events)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
